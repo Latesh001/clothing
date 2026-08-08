@@ -22,6 +22,17 @@
            └─────────────────┘ └─────────────┘ └─────────────────┘
 ```
 
+
+
+## Live Production (GitHub auto-deploy)
+
+- **Storefront:** https://frontend-woad-nine-60.vercel.app
+- **API:** https://manikanta-khadi-api.vercel.app/api
+- **Health:** https://manikanta-khadi-api.vercel.app/api/health
+- **GitHub repo:** https://github.com/Latesh001/clothing
+- Frontend Vercel project root: \rontend\ (auto-deploys on push to \main\)
+- Backend Vercel project root: \ackend\ (auto-deploys on push to \main\)
+- Database: MongoDB Atlas cluster \manikanta-khadi
 ---
 
 ## 1. MongoDB Atlas Setup
