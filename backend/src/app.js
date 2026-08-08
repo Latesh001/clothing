@@ -43,9 +43,23 @@ app.use(cookieParser());
 app.use(mongoSanitize());
 app.use(sanitizeRequest);
 
-// CORS
+// CORS — CLIENT_URL plus optional comma-separated ALLOWED_ORIGINS
+const allowedOrigins = [
+  process.env.CLIENT_URL || 'http://localhost:5173',
+  ...(process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+];
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin(origin, callback) {
+    // Allow non-browser clients (no Origin) and configured frontends
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true,
   maxAge: 86400,
 }));

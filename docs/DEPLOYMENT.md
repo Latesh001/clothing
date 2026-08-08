@@ -36,7 +36,16 @@
 
 ## 2. Backend Deployment (Railway / Render)
 
-### Railway
+### GitHub auto-deploy (Railway) — monorepo settings
+
+1. Import repo `https://github.com/Latesh001/clothing` into Railway
+2. **Root Directory:** `backend`
+3. **Start Command:** `npm start` (see `backend/railway.toml`)
+4. **Healthcheck:** `/api/health`
+5. Connect a MongoDB Atlas `MONGODB_URI` (or Railway Mongo plugin)
+6. Every push to `main` redeploys the API automatically
+
+### Railway CLI
 
 ```bash
 # Install Railway CLI
@@ -82,6 +91,17 @@ npm run seed
 
 ## 3. Frontend Deployment (Vercel)
 
+### GitHub auto-deploy (Vercel) — monorepo settings
+
+1. Import repo `https://github.com/Latesh001/clothing` into Vercel
+2. **Root Directory:** `frontend`
+3. Framework: Vite · Build: `npm run build` · Output: `dist`
+4. SPA rewrites are in `frontend/vercel.json`
+5. Set `VITE_API_URL=https://<your-railway-api>/api`
+6. Every push to `main` rebuilds the storefront automatically
+
+### Vercel CLI
+
 ```bash
 npm install -g vercel
 cd frontend
@@ -97,6 +117,7 @@ VITE_GOOGLE_CLIENT_ID=...
 
 ### Vercel Build Settings
 - Framework: Vite
+- Root Directory: `frontend`
 - Build Command: `npm run build`
 - Output Directory: `dist`
 
