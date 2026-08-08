@@ -1,0 +1,32 @@
+{
+  "name": "manikanta-khadi-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-oauth/google": "^0.13.5",
+    "axios": "^1.7.9",
+    "bootstrap": "^5.3.3",
+    "framer-motion": "^11.15.0",
+    "react": "^18.3.1",
+    "react-bootstrap": "^2.10.7",
+    "react-dom": "^18.3.1",
+    "react-helmet-async": "^2.0.5",
+    "react-hot-toast": "^2.4.1",
+    "react-icons": "^5.4.0",
+    "react-lazy-load-image-component": "^1.6.3",
+    "react-router-dom": "^7.18.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.7"
+  }
+}
