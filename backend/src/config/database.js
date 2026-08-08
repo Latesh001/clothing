@@ -24,6 +24,10 @@ const connectDB = async () => {
     console.log(`✅ MongoDB Connected: ${conn.connection.host} (pool ${conn.connection?.client?.s?.options?.maxPoolSize || 50})`);
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
+    // Don't kill the process on serverless platforms (Vercel); let the request fail instead
+    if (process.env.VERCEL) {
+      throw error;
+    }
     process.exit(1);
   }
 };

@@ -64,13 +64,16 @@ app.use(cors({
   maxAge: 86400,
 }));
 
-// Health check (no heavy work)
+// Health check (no heavy work) — reports DB state without failing the process
 app.get('/api/health', (req, res) => {
+  const mongoose = require('mongoose');
+  const dbState = ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState] || 'unknown';
   res.json({
     success: true,
     message: 'Manikanta Khadi API is running',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    database: dbState,
   });
 });
 

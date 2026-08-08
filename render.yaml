@@ -1,0 +1,31 @@
+# Alternative one-click backend host (Render) if Railway is unavailable.
+# Dashboard: New → Blueprint → connect https://github.com/Latesh001/clothing
+services:
+  - type: web
+    name: manikanta-khadi-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: UPI_ID
+        sync: false
+      - key: UPI_PAYEE_NAME
+        value: Manikanta Khadi Handlooms
+      - key: UPI_QR_EXPIRE_MINUTES
+        value: "30"

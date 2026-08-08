@@ -11,3 +11,8 @@ coverage/
 .idea/
 *.pem
 backend/uploads/
+
+.deploy-tmp/
+backend/.env.local
+frontend/.env.local
+
