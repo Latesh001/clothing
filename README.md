@@ -6,7 +6,7 @@ A production-ready, enterprise-level e-commerce website for premium handwoven kh
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, Vite, Tailwind CSS, Bootstrap, React Router |
+| Frontend | React 18, Vite, Tailwind CSS, React Router, PWA (installable app) |
 | Backend | Node.js, Express.js (MVC Architecture) |
 | Database | MongoDB with Mongoose ODM |
 | Auth | JWT, Email OTP, Mobile OTP, Google OAuth |
@@ -80,6 +80,7 @@ Admin Panel: http://localhost:5173/admin/login
 
 ### Customer Features
 - Premium responsive UI with handloom-themed design
+- **Installable app (PWA)** via direct link `/app` — no App Store / Play Store; same features as the website
 - Product browsing with advanced filters
 - Live search with instant suggestions
 - Cart, Wishlist, Compare

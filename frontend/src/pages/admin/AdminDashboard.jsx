@@ -21,15 +21,17 @@ const StatCard = ({ icon: Icon, label, value, color }) => (
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     adminAPI.getDashboard()
       .then(res => setStats(res.data.stats))
-      .catch(console.error)
+      .catch((err) => setError(err.response?.data?.message || 'Could not load dashboard data.'))
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="animate-pulse space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-gray-200 rounded-2xl" />)}</div>;
+  if (error) return <div className="bg-white rounded-2xl border p-8 text-center text-red-600">{error}</div>;
 
   return (
     <div>

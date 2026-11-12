@@ -14,24 +14,28 @@ import {
 } from 'react-icons/fi';
 import { productAPI, cartAPI, wishlistAPI, reviewAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { formatPrice, calculateDiscount, getImageUrl } from '../utils/helpers';
+import { formatPrice, calculateDiscount, optimizeImageUrl } from '../utils/helpers';
 import { IMAGES } from '../utils/images';
 import ProductCard from '../components/products/ProductCard';
 import toast from 'react-hot-toast';
+import { openAdminWhatsAppIfNeeded } from '../utils/whatsappNotify';
 
 const ProductDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { user, setShowLoginModal, refreshCart, refreshWishlist, wishlist } = useAuth();
+  const { user, setShowLoginModal, setCart, refreshCart, refreshWishlist, wishlist } = useAuth();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [buying, setBuying] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [infoTab, setInfoTab] = useState('description');
+  const [reviewForm, setReviewForm] = useState({ rating: 5, title: '', comment: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -76,6 +80,61 @@ const ProductDetail = () => {
     };
   }, [slug]);
 
+  // After login modal, finish Buy Now if the user started it while logged out
+  useEffect(() => {
+    if (!user || loading || !product) return;
+    const raw = sessionStorage.getItem('pendingBuyNow');
+    if (!raw) return;
+
+    let pending;
+    try {
+      pending = JSON.parse(raw);
+    } catch {
+      sessionStorage.removeItem('pendingBuyNow');
+      return;
+    }
+
+    const sameProduct =
+      pending.productId === product._id || pending.slug === product.slug || pending.slug === slug;
+    if (!sameProduct) return;
+
+    sessionStorage.removeItem('pendingBuyNow');
+    let cancelled = false;
+
+    (async () => {
+      setBuying(true);
+      try {
+        const res = await cartAPI.add({
+          productId: product._id,
+          quantity: pending.quantity || 1,
+          size: pending.size || '',
+          color: pending.color || '',
+        });
+        const nextCart = res.data.cart || (await refreshCart());
+        if (cancelled) return;
+        if (nextCart) setCart(nextCart);
+        openAdminWhatsAppIfNeeded(res.data);
+        if (!nextCart?.items?.length) {
+          toast.error('Could not start checkout. Please try again.');
+          return;
+        }
+        navigate('/checkout', { state: { fromBuyNow: true } });
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(err.response?.data?.message || 'Failed to start checkout');
+        }
+      } finally {
+        if (!cancelled) setBuying(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally only when auth/product become ready after login
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading, product?._id, slug]);
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
@@ -107,7 +166,7 @@ const ProductDetail = () => {
   const images = product.images?.length
     ? product.images
     : [{ url: IMAGES.fallback, alt: product.name }];
-  const mainImage = getImageUrl(images[selectedImage]?.url) || IMAGES.fallback;
+  const mainImage = optimizeImageUrl(images[selectedImage]?.url || IMAGES.fallback, 1100);
 
   const specRows = [
     product.category?.name && { label: 'Category', value: product.category.name },
@@ -121,19 +180,26 @@ const ProductDetail = () => {
     ...(product.specifications || []).filter((s) => s?.label && s?.value),
   ].filter(Boolean);
 
+  const addProductToCart = async () => {
+    const res = await cartAPI.add({
+      productId: product._id,
+      quantity,
+      size: selectedSize,
+      color: selectedColor,
+    });
+    const nextCart = res.data.cart || (await refreshCart());
+    if (nextCart) setCart(nextCart);
+    openAdminWhatsAppIfNeeded(res.data);
+    return nextCart;
+  };
+
   const handleAddToCart = async () => {
     if (!user) {
       setShowLoginModal(true);
       return;
     }
     try {
-      await cartAPI.add({
-        productId: product._id,
-        quantity,
-        size: selectedSize,
-        color: selectedColor,
-      });
-      await refreshCart();
+      await addProductToCart();
       toast.success('Added to cart');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to add to cart');
@@ -141,8 +207,34 @@ const ProductDetail = () => {
   };
 
   const handleBuyNow = async () => {
-    await handleAddToCart();
-    if (user) navigate('/checkout');
+    if (!user) {
+      sessionStorage.setItem(
+        'pendingBuyNow',
+        JSON.stringify({
+          productId: product._id,
+          quantity,
+          size: selectedSize,
+          color: selectedColor,
+          slug: product.slug || slug,
+        })
+      );
+      setShowLoginModal(true);
+      return;
+    }
+
+    setBuying(true);
+    try {
+      const nextCart = await addProductToCart();
+      if (!nextCart?.items?.length) {
+        toast.error('Could not start checkout. Please try again.');
+        return;
+      }
+      navigate('/checkout', { state: { fromBuyNow: true } });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to start checkout');
+    } finally {
+      setBuying(false);
+    }
   };
 
   const handleWishlist = async () => {
@@ -153,6 +245,51 @@ const ProductDetail = () => {
     await wishlistAPI.toggle(product._id);
     await refreshWishlist();
     toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist');
+  };
+
+  const reloadReviews = async () => {
+    if (!product?._id) return;
+    try {
+      const r = await reviewAPI.getByProduct(product._id);
+      setReviews(r.data.reviews || []);
+    } catch {
+      /* keep current list */
+    }
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+    if (!reviewForm.rating) {
+      toast.error('Please select a star rating');
+      return;
+    }
+    if (!reviewForm.comment.trim()) {
+      toast.error('Please write your review');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      await reviewAPI.create({
+        productId: product._id,
+        rating: reviewForm.rating,
+        title: reviewForm.title.trim(),
+        comment: reviewForm.comment.trim(),
+      });
+      toast.success('Thank you! Your review was submitted');
+      setReviewForm({ rating: 5, title: '', comment: '' });
+      await reloadReviews();
+      const refreshed = await productAPI.getBySlug(product.slug || slug);
+      if (refreshed.data?.product) setProduct(refreshed.data.product);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const handleShare = async () => {
@@ -218,6 +355,12 @@ const ProductDetail = () => {
                   src={mainImage}
                   alt={product.name}
                   className="w-full h-full object-cover"
+                  fetchPriority="high"
+                  decoding="async"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = IMAGES.fallback;
+                  }}
                 />
                 {discount > 0 && (
                   <span className="badge-sale absolute top-4 left-4 text-white px-3 py-1 text-xs font-semibold tracking-wide rounded-full">
@@ -239,8 +382,10 @@ const ProductDetail = () => {
                       }`}
                     >
                       <img
-                        src={getImageUrl(img.url) || IMAGES.fallback}
+                        src={optimizeImageUrl(img.url || IMAGES.fallback, 160)}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                       />
                     </button>
@@ -259,7 +404,14 @@ const ProductDetail = () => {
                 {product.name}
               </h1>
 
-              <div className="flex items-center gap-2 mb-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setInfoTab('reviews');
+                  document.getElementById('product-info-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="flex items-center gap-2 mb-5 text-left hover:opacity-80 transition-opacity"
+              >
                 <div className="flex items-center gap-0.5">
                   {[...Array(5)].map((_, i) => (
                     <FiStar
@@ -273,12 +425,12 @@ const ProductDetail = () => {
                     />
                   ))}
                 </div>
-                <span className="text-sm text-[#6E655C]">
+                <span className="text-sm text-[#6E655C] underline-offset-2 hover:underline">
                   {product.averageRating
-                    ? `${product.averageRating.toFixed(1)} · ${product.totalReviews || 0} reviews`
-                    : 'No reviews yet'}
+                    ? `${product.averageRating.toFixed(1)} · ${product.totalReviews || reviews.length || 0} reviews`
+                    : 'No reviews yet — write one'}
                 </span>
-              </div>
+              </button>
 
               <div className="flex flex-wrap items-baseline gap-3 mb-5 pb-5 border-b border-[#E0D6C8]">
                 <span className="text-3xl font-semibold text-[#1F5570]">
@@ -415,10 +567,10 @@ const ProductDetail = () => {
               <button
                 type="button"
                 onClick={handleBuyNow}
-                disabled={product.stock < 1}
+                disabled={product.stock < 1 || buying}
                 className="w-full btn-outline-dark py-3.5 mb-6 disabled:opacity-50 inline-flex items-center justify-center"
               >
-                Buy Now
+                {buying ? 'Starting checkout...' : 'Buy Now'}
               </button>
 
               <ul className="space-y-3 text-sm text-[#3D3832]">
@@ -444,7 +596,7 @@ const ProductDetail = () => {
       </div>
 
       {/* Description / Specs / Reviews */}
-      <div className="bg-[#FFFEF9]">
+      <div id="product-info-tabs" className="bg-[#FFFEF9]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 md:py-14">
           <div className="border-b border-[#E0D6C8] flex gap-1 overflow-x-auto">
             {tabs.map((tab) => (
@@ -507,6 +659,75 @@ const ProductDetail = () => {
                 <h2 className="font-[family-name:var(--font-display)] text-2xl text-[#1A1714] mb-6">
                   Customer reviews
                 </h2>
+
+                <form
+                  onSubmit={handleSubmitReview}
+                  className="mb-10 p-5 sm:p-6 border border-[#E0D6C8] bg-[#F7F3EC]/60 space-y-4"
+                >
+                  <h3 className="font-semibold text-[#1A1714]">Write a review</h3>
+                  {!user && (
+                    <p className="text-sm text-[#6E655C]">
+                      Please{' '}
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginModal(true)}
+                        className="text-[#1F5570] font-semibold underline"
+                      >
+                        login
+                      </button>{' '}
+                      to submit a review.
+                    </p>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[#6E655C] mb-2">
+                      Your rating
+                    </p>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setReviewForm((f) => ({ ...f, rating: star }))}
+                          className="p-1"
+                          aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                        >
+                          <FiStar
+                            size={22}
+                            className={
+                              star <= reviewForm.rating
+                                ? 'text-[#C4A35A] fill-[#C4A35A]'
+                                : 'text-[#D4CBC0]'
+                            }
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={reviewForm.title}
+                    onChange={(e) => setReviewForm((f) => ({ ...f, title: e.target.value }))}
+                    placeholder="Review title (optional)"
+                    className="w-full px-4 py-3 rounded-lg border border-[#E0D6C8] bg-white outline-none focus:border-[#1F5570]"
+                    maxLength={120}
+                  />
+                  <textarea
+                    value={reviewForm.comment}
+                    onChange={(e) => setReviewForm((f) => ({ ...f, comment: e.target.value }))}
+                    placeholder="Share your experience with this product"
+                    rows={4}
+                    required
+                    className="w-full px-4 py-3 rounded-lg border border-[#E0D6C8] bg-white outline-none focus:border-[#1F5570] resize-y"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submittingReview}
+                    className="btn-primary-custom px-6 py-3 disabled:opacity-50"
+                  >
+                    {submittingReview ? 'Submitting...' : 'Submit review'}
+                  </button>
+                </form>
+
                 {reviews.length ? (
                   <div className="space-y-6">
                     {reviews.map((review) => (

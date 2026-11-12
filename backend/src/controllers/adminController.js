@@ -1,17 +1,33 @@
 const Admin = require('../models/Admin');
+const {
+  checkLoginAllowed,
+  recordLoginFailure,
+  clearLoginFailures,
+} = require('../middleware/securityGuards');
 
 exports.adminLogin = async (req, res, next) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
+    const ip =
+      req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() ||
+      req.ip ||
+      '';
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: 'Email and password are required.' });
     }
 
+    const lockKey = `admin:${email}`;
+    const lock = checkLoginAllowed(lockKey, ip);
+    if (!lock.allowed) {
+      return res.status(429).json({ success: false, message: lock.message });
+    }
+
     const admin = await Admin.findOne({ email }).select('+password');
 
     if (!admin || !(await admin.comparePassword(password))) {
+      recordLoginFailure(lockKey, ip);
       return res.status(401).json({ success: false, message: 'Invalid admin credentials.' });
     }
 
@@ -21,6 +37,7 @@ exports.adminLogin = async (req, res, next) => {
 
     admin.lastLogin = new Date();
     await admin.save({ validateBeforeSave: false });
+    clearLoginFailures(lockKey, ip);
 
     const token = admin.generateAuthToken();
     res.json({

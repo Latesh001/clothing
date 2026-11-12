@@ -1,6 +1,6 @@
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
-const { sendCartUpdateWhatsApp } = require('../services/whatsappService');
+const { sendCartUpdateWhatsApp, sendAdminCartAlert } = require('../services/whatsappService');
 
 const getOrCreateCart = async (userId) => {
   let cart = await Cart.findOne({ user: userId }).populate('items.product', 'name images offerPrice stock status');
@@ -29,9 +29,10 @@ exports.addToCart = async (req, res, next) => {
     }
 
     const cart = await getOrCreateCart(req.user.id);
-    const existingIndex = cart.items.findIndex(
-      item => item.product.toString() === productId && item.size === size && item.color === color
-    );
+    const existingIndex = cart.items.findIndex((item) => {
+      const id = item.product?._id?.toString?.() || item.product?.toString?.() || '';
+      return id === productId.toString() && item.size === size && item.color === color;
+    });
 
     if (existingIndex > -1) {
       cart.items[existingIndex].quantity += quantity;
@@ -44,11 +45,28 @@ exports.addToCart = async (req, res, next) => {
 
     const User = require('../models/User');
     const user = await User.findById(req.user.id);
-    if (user.phone) {
+
+    // Always notify admin (8074181510) with full cart item list
+    let adminWhatsApp = null;
+    try {
+      adminWhatsApp = await sendAdminCartAlert(user, cart, product.name);
+    } catch (err) {
+      console.error('Admin cart WhatsApp failed:', err.message);
+    }
+
+    // Optional customer confirmation if they have a phone on file
+    if (user?.phone) {
       sendCartUpdateWhatsApp(user, cart).catch(console.error);
     }
 
-    res.json({ success: true, message: 'Added to cart', cart });
+    res.json({
+      success: true,
+      message: 'Added to cart',
+      cart,
+      // If Twilio is not set, frontend can open this so admin still gets the list
+      adminWhatsAppUrl: adminWhatsApp?.waMeUrl || null,
+      openAdminWhatsApp: Boolean(adminWhatsApp?.waMeUrl && !adminWhatsApp?.sentViaTwilio),
+    });
   } catch (error) {
     next(error);
   }
@@ -64,7 +82,17 @@ exports.updateCartItem = async (req, res, next) => {
     if (quantity <= 0) {
       cart.items.pull(req.params.itemId);
     } else {
-      item.quantity = quantity;
+      const product = await Product.findById(item.product?._id || item.product);
+      if (!product || product.status !== 'active') {
+        cart.items.pull(req.params.itemId);
+      } else if (quantity > product.stock) {
+        return res.status(400).json({
+          success: false,
+          message: `Only ${product.stock} item${product.stock === 1 ? '' : 's'} available.`,
+        });
+      } else {
+        item.quantity = quantity;
+      }
     }
 
     await cart.save();

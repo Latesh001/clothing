@@ -15,9 +15,8 @@ backend/uploads/
 .deploy-tmp/
 backend/.env.local
 frontend/.env.local
+frontend/.env.production.local
 
 .vercel/
-ATLAS_LOGIN_NOW.txt
 backend/.vercel/
 frontend/.vercel/
-frontend/.env.production.local

@@ -16,10 +16,16 @@ const app = express();
 // Needed behind proxies (Railway/Render/Vercel) for correct IPs & rate limits
 app.set('trust proxy', 1);
 
-// Security headers
+// Security headers (login → payment → delivery surface)
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false, // API-only; frontend hosts its own CSP
+  referrerPolicy: { policy: 'no-referrer' },
+  hsts: process.env.NODE_ENV === 'production' ? { maxAge: 15552000, includeSubDomains: true } : false,
 }));
+
+// Do not advertise Express
+app.disable('x-powered-by');
 
 // Compress responses for faster loads under load
 app.use(compression());

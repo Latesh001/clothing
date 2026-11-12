@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Review = require('../models/Review');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
@@ -5,6 +6,24 @@ const Order = require('../models/Order');
 exports.createReview = async (req, res, next) => {
   try {
     const { productId, rating, title, comment, orderId } = req.body;
+
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ success: false, message: 'Valid product is required' });
+    }
+
+    const numericRating = Number(rating);
+    if (!numericRating || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ success: false, message: 'Please select a rating from 1 to 5' });
+    }
+
+    if (!comment || !String(comment).trim()) {
+      return res.status(400).json({ success: false, message: 'Please write a review comment' });
+    }
+
+    const product = await Product.findById(productId);
+    if (!product || product.status !== 'active') {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
 
     const existing = await Review.findOne({ product: productId, user: req.user.id });
     if (existing) return res.status(400).json({ success: false, message: 'You have already reviewed this product' });
@@ -19,11 +38,12 @@ exports.createReview = async (req, res, next) => {
       product: productId,
       user: req.user.id,
       order: orderId,
-      rating,
-      title,
-      comment,
+      rating: numericRating,
+      title: title?.trim() || undefined,
+      comment: String(comment).trim(),
       isVerifiedPurchase,
       images: req.body.images || [],
+      isApproved: true,
     });
 
     await updateProductRatings(productId);
@@ -31,6 +51,9 @@ exports.createReview = async (req, res, next) => {
 
     res.status(201).json({ success: true, message: 'Review submitted', review });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'You have already reviewed this product' });
+    }
     next(error);
   }
 };
@@ -56,8 +79,9 @@ exports.getProductReviews = async (req, res, next) => {
 };
 
 const updateProductRatings = async (productId) => {
+  const productObjectId = new mongoose.Types.ObjectId(productId);
   const stats = await Review.aggregate([
-    { $match: { product: productId, isApproved: true } },
+    { $match: { product: productObjectId, isApproved: true } },
     { $group: { _id: null, avgRating: { $avg: '$rating' }, count: { $sum: 1 } } },
   ]);
 

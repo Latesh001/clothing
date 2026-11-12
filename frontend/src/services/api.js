@@ -1,11 +1,13 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const configuredApiUrl = String(import.meta.env.VITE_API_URL || '/api').trim();
+const API_URL = configuredApiUrl.replace(/\/$/, '');
 
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
+  timeout: 20000,
 });
 
 api.interceptors.request.use((config) => {
@@ -45,6 +47,9 @@ api.interceptors.response.use(
         window.location.href = '/admin/login';
       }
     }
+    if (error.response?.status === 401 && !isAdminRoute && !isAdminLogin) {
+      localStorage.removeItem('token');
+    }
     return Promise.reject(error);
   }
 );
@@ -53,7 +58,13 @@ export default api;
 
 // Auth
 export const authAPI = {
-  register: (data) => api.post('/auth/register', data),
+  /** Registration disabled — use login (creates account on first use) */
+  register: () =>
+    Promise.reject({
+      response: {
+        data: { message: 'Please use Login. Accounts are created automatically on first login.' },
+      },
+    }),
   login: (data) => api.post('/auth/login', data),
   sendOTP: (data) => api.post('/auth/send-otp', data),
   verifyOTP: (data) => api.post('/auth/verify-otp', data),

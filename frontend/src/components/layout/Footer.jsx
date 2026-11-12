@@ -9,6 +9,7 @@ import { siteAPI } from '../../services/api';
 const quickLinks = [
   { to: '/about', label: 'About Us' },
   { to: '/shop', label: 'Shop All' },
+  { to: '/app', label: 'Open App' },
   { to: '/faq', label: 'FAQ' },
   { to: '/track-order', label: 'Track Order' },
   { to: '/contact', label: 'Contact Us' },

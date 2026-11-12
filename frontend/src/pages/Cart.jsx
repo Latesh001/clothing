@@ -4,7 +4,8 @@ import { Helmet } from 'react-helmet-async';
 import { FiTrash2, FiMinus, FiPlus, FiShoppingBag } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { cartAPI } from '../services/api';
-import { formatPrice } from '../utils/helpers';
+import { formatPrice, getImageUrl } from '../utils/helpers';
+import { IMAGES } from '../utils/images';
 import toast from 'react-hot-toast';
 
 const Cart = () => {
@@ -77,7 +78,15 @@ const Cart = () => {
           <div className="lg:col-span-2 space-y-4">
             {items.map(item => (
               <div key={item._id} className="flex gap-4 bg-white rounded-2xl p-4 shadow-sm border">
-                <img src={item.product?.images?.[0]?.url} alt={item.product?.name} className="w-24 h-32 object-cover rounded-lg" />
+                <img
+                  src={getImageUrl(item.product?.images?.[0]?.url) || IMAGES.fallback}
+                  alt={item.product?.name}
+                  className="w-24 h-32 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = IMAGES.fallback;
+                  }}
+                />
                 <div className="flex-1">
                   <h3 className="font-medium">{item.product?.name}</h3>
                   <p className="text-sm text-gray-500">{item.size && `Size: ${item.size}`} {item.color && `• Color: ${item.color}`}</p>

@@ -12,8 +12,13 @@ const {
   verifyPaymentToken,
   MAX_UTR_ATTEMPTS,
 } = require('../services/upiPaymentSecurity');
-const { sendOrderConfirmationEmail } = require('../services/emailService');
-const { sendOrderConfirmationWhatsApp } = require('../services/whatsappService');
+const { sendOrderConfirmationEmail, sendOrderStatusEmail } = require('../services/emailService');
+const {
+  sendOrderConfirmationWhatsApp,
+  sendAdminOrderAlert,
+} = require('../services/whatsappService');
+const { canTransitionOrderStatus } = require('../middleware/securityGuards');
+const User = require('../models/User');
 
 const generateOrderNumber = () => {
   const timestamp = Date.now().toString().slice(-8);
@@ -223,11 +228,20 @@ exports.createOrder = async (req, res, next) => {
     sendOrderConfirmationEmail(req.user, order).catch(() => {});
     sendOrderConfirmationWhatsApp(req.user, order).catch(() => {});
 
+    let adminWhatsApp = null;
+    try {
+      adminWhatsApp = await sendAdminOrderAlert(req.user, order);
+    } catch (err) {
+      console.error('Admin order WhatsApp failed:', err.message);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
       order: sanitizeOrderForCustomer(order),
       upiQr,
+      adminWhatsAppUrl: adminWhatsApp?.waMeUrl || null,
+      openAdminWhatsApp: Boolean(adminWhatsApp?.waMeUrl && !adminWhatsApp?.sentViaTwilio),
     });
   } catch (error) {
     next(error);
@@ -640,12 +654,38 @@ exports.getAdminOrders = async (req, res, next) => {
 exports.updateOrderStatus = async (req, res, next) => {
   try {
     const { status, message, location } = req.body;
+    const allowedStatuses = [
+      'pending',
+      'confirmed',
+      'processing',
+      'shipped',
+      'out_for_delivery',
+      'delivered',
+      'cancelled',
+    ];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid order status.' });
+    }
+
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
+    if (!canTransitionOrderStatus(order.status, status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot change status from "${order.status}" to "${status}".`,
+      });
+    }
+
     order.status = status;
-    order.tracking.push({ status, message, location });
+    order.tracking.push({
+      status,
+      message: message || `Order is now ${status}`,
+      location,
+      updatedBy: req.admin?._id,
+    });
     if (status === 'delivered') order.deliveredAt = new Date();
+    if (status === 'cancelled') order.cancelledAt = new Date();
     await order.save();
 
     await Notification.create({
@@ -653,7 +693,19 @@ exports.updateOrderStatus = async (req, res, next) => {
       title: 'Order Update',
       message: message || `Your order #${order.orderNumber} is now ${status}`,
       type: 'order',
-      link: `/orders/${order._id}`,
+      link: `/track-order/${order.orderNumber}`,
+    });
+
+    // Email customer with tracking / delivery details (non-blocking)
+    setImmediate(async () => {
+      try {
+        const customer = await User.findById(order.user);
+        if (customer?.email) {
+          await sendOrderStatusEmail(customer, order, status);
+        }
+      } catch (err) {
+        console.error('Order status email failed:', err.message);
+      }
     });
 
     res.json({ success: true, message: 'Order status updated', order });

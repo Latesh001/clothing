@@ -12,25 +12,29 @@ const { protect, optionalAuth, adminProtect } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { upload } = require('../middleware/upload');
 const upiPaymentLimiter = require('../middleware/upiPaymentLimiter');
-const { authLimiter } = require('../middleware/authLimiter');
+const { authLimiter, adminAuthLimiter } = require('../middleware/authLimiter');
+const publicCache = require('../middleware/publicCache');
 
 const router = express.Router();
 
-// Auth routes (dedicated limiter — safe for many concurrent customers)
-router.post('/auth/register', authLimiter, [
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('email').isEmail().withMessage('Valid email required'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-], validate, authController.register);
+// Auth — registration disabled; login creates account on first use
+router.post('/auth/register', authLimiter, authController.register);
 
 router.post('/auth/login', authLimiter, [
   body('email').isEmail().withMessage('Valid email is required'),
-  body('phone').trim().notEmpty().withMessage('Phone number is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('phone').optional({ values: 'falsy' }).trim(),
 ], validate, authController.login);
 
-router.post('/auth/send-otp', authLimiter, authController.sendOTP);
-router.post('/auth/verify-otp', authLimiter, authController.verifyOTP);
+router.post('/auth/send-otp', authLimiter, [
+  body('email').optional({ values: 'falsy' }).isEmail().withMessage('Valid email required'),
+  body('phone').optional({ values: 'falsy' }).trim(),
+], validate, authController.sendOTP);
+router.post('/auth/verify-otp', authLimiter, [
+  body('email').optional({ values: 'falsy' }).isEmail().withMessage('Valid email required'),
+  body('phone').optional({ values: 'falsy' }).trim(),
+  body('otp').isLength({ min: 6, max: 6 }).isNumeric().withMessage('A 6-digit OTP is required'),
+], validate, authController.verifyOTP);
 router.post('/auth/google', authLimiter, authController.googleLogin);
 router.post('/auth/logout', protect, authController.logout);
 router.get('/auth/profile', protect, authController.getProfile);
@@ -39,8 +43,8 @@ router.post('/auth/addresses', protect, authController.addAddress);
 router.put('/auth/addresses/:addressId', protect, authController.updateAddress);
 router.delete('/auth/addresses/:addressId', protect, authController.deleteAddress);
 
-// Admin auth
-router.post('/admin/login', authLimiter, [
+// Admin auth (stricter limiter)
+router.post('/admin/login', adminAuthLimiter, [
   body('email').isEmail(),
   body('password').notEmpty(),
 ], validate, adminController.adminLogin);
@@ -48,11 +52,11 @@ router.get('/admin/dashboard', adminProtect, adminController.getDashboardStats);
 router.get('/admin/analytics', adminProtect, adminController.getAnalytics);
 
 // Products (public)
-router.get('/products', productController.getProducts);
-router.get('/products/search', productController.searchProducts);
-router.get('/products/home', productController.getHomeData);
-router.get('/products/:slug', optionalAuth, productController.getProduct);
-router.get('/categories', productController.getCategories);
+router.get('/products', publicCache(45), productController.getProducts);
+router.get('/products/search', publicCache(30), productController.searchProducts);
+router.get('/products/home', publicCache(60), productController.getHomeData);
+router.get('/products/:slug', publicCache(45), optionalAuth, productController.getProduct);
+router.get('/categories', publicCache(120), productController.getCategories);
 
 // Contact & newsletter
 router.post('/contact', contactController.submitContact);
@@ -98,7 +102,7 @@ router.put('/admin/orders/:id/verify-upi', adminProtect, orderController.verifyU
 
 // Reviews & Notifications
 router.post('/reviews', protect, reviewController.createReview);
-router.get('/reviews/:productId', reviewController.getProductReviews);
+router.get('/reviews/:productId', publicCache(60), reviewController.getProductReviews);
 router.get('/notifications', protect, reviewController.getNotifications);
 router.put('/notifications/:id/read', protect, reviewController.markNotificationRead);
 

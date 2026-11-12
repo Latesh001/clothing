@@ -1,80 +1,64 @@
 # Deployment Guide
 
-## Architecture Overview
+## Architecture
 
 ```
-                    ┌─────────────┐
-                    │   Cloudflare │ (CDN + SSL)
-                    └──────┬──────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-     ┌────────▼────────┐      ┌────────▼────────┐
-     │  Frontend (Vite) │      │  Backend (API)  │
-     │  Vercel/Netlify  │      │  Railway/Render │
-     │  Port: 443       │      │  Port: 5000     │
-     └─────────────────┘      └────────┬────────┘
-                                       │
-                    ┌──────────────────┼──────────────────┐
-                    │                  │                  │
-           ┌────────▼────────┐ ┌──────▼──────┐ ┌────────▼────────┐
-           │ MongoDB Atlas    │ │ Cloudinary  │ │ UPI Dynamic QR  │
-           └─────────────────┘ └─────────────┘ └─────────────────┘
+     ┌──────────────────┐      ┌──────────────────┐
+     │ Frontend (Vite)  │─────▶│ Backend (API)    │
+     │ Vercel           │      │ Vercel           │
+     └──────────────────┘      └────────┬─────────┘
+                                        │
+               ┌────────────────────────┼────────────────────────┐
+               │                        │                        │
+        ┌──────▼──────┐          ┌──────▼──────┐          ┌──────▼──────┐
+        │ MongoDB     │          │ Cloudinary  │          │ UPI Dynamic │
+        │ Atlas       │          │ (images)    │          │ QR          │
+        └─────────────┘          └─────────────┘          └─────────────┘
 ```
 
-
-
-## Live Production (GitHub auto-deploy)
+## Live Production
 
 - **Storefront:** https://frontend-woad-nine-60.vercel.app
+- **App link (PWA — no App Store / Play Store):** https://frontend-woad-nine-60.vercel.app/app
 - **API:** https://manikanta-khadi-api.vercel.app/api
 - **Health:** https://manikanta-khadi-api.vercel.app/api/health
-- **GitHub repo:** https://github.com/Latesh001/clothing
-- Frontend Vercel project root: \rontend\ (auto-deploys on push to \main\)
-- Backend Vercel project root: \ackend\ (auto-deploys on push to \main\)
-- Database: MongoDB Atlas cluster \manikanta-khadi
+- **GitHub:** https://github.com/Latesh001/clothing
+- Frontend Vercel root: `frontend` (auto-deploys on `main`)
+- Backend Vercel root: `backend` (auto-deploys on `main`)
+- Database: MongoDB Atlas cluster `manikanta-khadi`
+
+### Progressive Web App (direct link)
+
+The storefront is also an installable **Progressive Web App**. Share `/app` — customers open the same shop, cart, wishlist, checkout, and order tracking without downloading from stores. The normal website URLs keep working unchanged. PWA install works over **HTTPS** (Vercel production); use Chrome/Edge “Install app” or iOS Safari “Add to Home Screen”.
+
 ---
 
-## 1. MongoDB Atlas Setup
+## 1. MongoDB Atlas
 
 1. Create account at [mongodb.com/atlas](https://www.mongodb.com/atlas)
 2. Create a free M0 cluster
-3. Add database user with read/write permissions
-4. Whitelist IP: `0.0.0.0/0` (or specific server IPs)
-5. Get connection string: `mongodb+srv://user:pass@cluster.mongodb.net/manikanta_khadi`
+3. Create a database user with read/write access
+4. Network access: allow `0.0.0.0/0` (or lock to known IPs)
+5. Connection string: `mongodb+srv://user:pass@cluster.mongodb.net/manikanta_khadi`
 
 ---
 
-## 2. Backend Deployment (Railway / Render)
+## 2. Backend (Vercel)
 
-### GitHub auto-deploy (Railway) — monorepo settings
-
-1. Import repo `https://github.com/Latesh001/clothing` into Railway
+1. Import the GitHub repo into Vercel
 2. **Root Directory:** `backend`
-3. **Start Command:** `npm start` (see `backend/railway.toml`)
-4. **Healthcheck:** `/api/health`
-5. Connect a MongoDB Atlas `MONGODB_URI` (or Railway Mongo plugin)
-6. Every push to `main` redeploys the API automatically
+3. Entry: `backend/api/index.js` + `backend/vercel.json`
+4. Set environment variables (below)
+5. Deploy — every push to `main` redeploys the API
 
-### Railway CLI
-
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-railway login
-cd backend
-railway init
-railway up
-```
-
-### Environment Variables (Production)
+### Backend environment variables
 
 ```env
 NODE_ENV=production
-PORT=5000
-CLIENT_URL=https://yourdomain.com
+CLIENT_URL=https://your-frontend.vercel.app
+ALLOWED_ORIGINS=https://your-frontend.vercel.app
 MONGODB_URI=mongodb+srv://...
-JWT_SECRET=<generate-strong-32char-secret>
+JWT_SECRET=<strong-32+-char-secret>
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
@@ -82,170 +66,89 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=...
 SMTP_PASS=...
+EMAIL_FROM=Manikanta Khadi & Handlooms <you@email.com>
+CONTACT_EMAIL=you@email.com
 UPI_ID=yourshop@upi
 UPI_PAYEE_NAME=Manikanta Khadi Handlooms
 UPI_QR_EXPIRE_MINUTES=30
-TWILIO_ACCOUNT_SID=...
-TWILIO_AUTH_TOKEN=...
-TWILIO_WHATSAPP_FROM=whatsapp:+...
-ADMIN_EMAIL=admin@manikantakhadi.com
+ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=<strong-password>
 ```
 
-### Seed Production Database
+Optional helper to set Atlas URI on the API project:
+
+```powershell
+.\scripts\apply-mongodb-uri.ps1 "mongodb+srv://..."
+```
+
+Seed (from a machine with `MONGODB_URI` set):
 
 ```bash
+cd backend
 npm run seed
 ```
 
 ---
 
-## 3. Frontend Deployment (Vercel)
+## 3. Frontend (Vercel)
 
-### GitHub auto-deploy (Vercel) — monorepo settings
-
-1. Import repo `https://github.com/Latesh001/clothing` into Vercel
+1. Import the same GitHub repo into a second Vercel project
 2. **Root Directory:** `frontend`
 3. Framework: Vite · Build: `npm run build` · Output: `dist`
-4. SPA rewrites are in `frontend/vercel.json`
-5. Set `VITE_API_URL=https://<your-railway-api>/api`
-6. Every push to `main` rebuilds the storefront automatically
-
-### Vercel CLI
-
-```bash
-npm install -g vercel
-cd frontend
-vercel
-```
-
-### Environment Variables
+4. SPA rewrites: `frontend/vercel.json`
+5. Env: `VITE_API_URL=https://manikanta-khadi-api.vercel.app/api`
+6. Optional: `VITE_GOOGLE_CLIENT_ID=...`
 
 ```env
-VITE_API_URL=https://api.yourdomain.com/api
+VITE_API_URL=https://manikanta-khadi-api.vercel.app/api
 VITE_GOOGLE_CLIENT_ID=...
 ```
 
-### Vercel Build Settings
-- Framework: Vite
-- Root Directory: `frontend`
-- Build Command: `npm run build`
-- Output Directory: `dist`
+---
+
+## 4. Custom domain
+
+1. Buy a domain (e.g. manikantakhadi.com)
+2. Add it in the frontend Vercel project
+3. Optionally add `api.yourdomain.com` to the backend Vercel project
+4. Update `CLIENT_URL`, `ALLOWED_ORIGINS`, and `VITE_API_URL`
 
 ---
 
-## 4. Custom Domain Setup
-
-1. Purchase domain (e.g., manikantakhadi.com)
-2. Point frontend CNAME to Vercel/Netlify
-3. Point API subdomain (api.manikantakhadi.com) to backend server
-4. Enable SSL on both (automatic with Vercel/Railway)
-
----
-
-## 5. Cloudinary Setup
+## 5. Cloudinary
 
 1. Create account at [cloudinary.com](https://cloudinary.com)
-2. Get Cloud Name, API Key, API Secret from dashboard
-3. Create upload preset for `manikanta-khadi` folder
+2. Copy Cloud Name, API Key, API Secret into backend env
 
 ---
 
-## 6. UPI Dynamic QR Setup
+## 6. UPI Dynamic QR
 
-1. Get your business UPI ID from your bank / UPI app (e.g. `shop@oksbi`)
-2. Set `UPI_ID` and `UPI_PAYEE_NAME` in backend `.env`
-3. Each order generates a unique QR with order amount and note
-4. Customers pay via any UPI app and submit the UTR; admin can also verify in Orders
+1. Set business `UPI_ID` and `UPI_PAYEE_NAME` in backend env
+2. Checkout generates a QR per order; customer submits UTR; admin verifies
 
 ---
 
-## 7. Email Setup (Gmail App Password)
+## 7. Email (Gmail App Password)
 
-1. Enable 2FA on Gmail account
-2. Generate App Password: Google Account → Security → App Passwords
-3. Use app password in `SMTP_PASS`
-
----
-
-## 8. WhatsApp (Twilio)
-
-1. Create Twilio account
-2. Enable WhatsApp Sandbox or apply for WhatsApp Business API
-3. Configure webhook for message status
+1. Enable 2FA on Gmail
+2. Create an App Password
+3. Set `SMTP_USER` / `SMTP_PASS` (leave empty in local `.env` to skip real SMTP)
 
 ---
 
-## 9. Production Checklist
+## 8. Production checklist
 
-- [ ] Change default admin password
-- [ ] Set strong JWT_SECRET (32+ characters)
-- [ ] Enable MongoDB Atlas IP whitelist
-- [ ] Configure CORS with production frontend URL
-- [ ] Set NODE_ENV=production
-- [ ] Set real business UPI_ID in backend .env
-- [ ] Test UPI QR payment flow end-to-end
-- [ ] Configure Google Analytics
-- [ ] Submit sitemap to Google Search Console
-- [ ] Set up error monitoring (Sentry recommended)
-- [ ] Configure automated backups for MongoDB
-- [ ] Enable rate limiting (already configured)
-- [ ] Test email delivery
-- [ ] Test WhatsApp notifications
-
----
-
-## 10. Docker Deployment (Optional)
-
-```dockerfile
-# backend/Dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-EXPOSE 5000
-CMD ["node", "server.js"]
-```
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "5000:5000"
-    env_file: ./backend/.env
-    depends_on:
-      - mongo
-  mongo:
-    image: mongo:6
-    volumes:
-      - mongo_data:/data/db
-  frontend:
-    build: ./frontend
-    ports:
-      - "80:80"
-volumes:
-  mongo_data:
-```
-
-```bash
-docker-compose up -d
-```
-
----
-
-## 11. Monitoring & Maintenance
-
-- **Uptime:** Use UptimeRobot for API health checks (`/api/health`)
-- **Logs:** Railway/Render provide built-in logging
-- **Backups:** MongoDB Atlas automated daily backups
-- **Updates:** Regular dependency updates with `npm audit`
+- [ ] Strong `JWT_SECRET` and admin password
+- [ ] MongoDB Atlas network access configured
+- [ ] CORS / `CLIENT_URL` matches the live storefront
+- [ ] Real `UPI_ID` set
+- [ ] Test login, cart, UPI/COD checkout
+- [ ] Test product image upload
+- [ ] Submit `sitemap.xml` to Search Console
 
 ---
 
 ## Support
 
-For deployment assistance: support@manikantakhadi.com
+For deployment help: lateshk169@gmail.com

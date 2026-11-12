@@ -32,8 +32,14 @@ export const AuthProvider = ({ children }) => {
       setUser(profileRes.data.user);
       setCart(cartRes.data.cart || { items: [] });
       setWishlist(wishlistRes.data.wishlist || { products: [] });
-    } catch {
-      localStorage.removeItem('token');
+    } catch (err) {
+      // Only clear session on real auth failure — not network/API outages
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        localStorage.removeItem('token');
+        setUser(null);
+        setCart({ items: [], savedForLater: [] });
+        setWishlist({ products: [] });
+      }
     } finally {
       setLoading(false);
     }
@@ -43,16 +49,19 @@ export const AuthProvider = ({ children }) => {
     loadUserData();
   }, [loadUserData]);
 
-  // Show login popup when the app opens and the user is not logged in
+  // Login popup on visit when guest (no separate register page)
   useEffect(() => {
     if (loading) return;
-    if (user) return;
+    if (user) {
+      sessionStorage.removeItem('loginShown');
+      return;
+    }
     if (sessionStorage.getItem('loginShown') === 'true') return;
 
     const timer = setTimeout(() => {
       setShowLoginModal(true);
       sessionStorage.setItem('loginShown', 'true');
-    }, 400);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [loading, user]);
@@ -67,32 +76,37 @@ export const AuthProvider = ({ children }) => {
       } else {
         res = await authAPI.login(credentials);
       }
+      if (!res.data?.token || !res.data?.user) {
+        throw new Error('Login response was incomplete. Please try again.');
+      }
       localStorage.setItem('token', res.data.token);
       setUser(res.data.user);
       setShowLoginModal(false);
+      // Refresh cart/wishlist; keep session even if secondary calls fail
       await loadUserData();
       toast.success(res.data.message || 'Login successful');
       return res.data;
     } catch (err) {
       const data = err.response?.data;
       const firstValidation = data?.errors?.[0]?.message;
-      toast.error(firstValidation || data?.message || 'Login failed');
+      const networkHint =
+        !err.response
+          ? 'Cannot reach server. Make sure MongoDB and the backend are running, then try again.'
+          : null;
+      const dbHint =
+        data?.message?.includes('buffering timed out') || data?.message?.includes('ECONNREFUSED')
+          ? 'Database is not ready. Wait a moment and try again.'
+          : null;
+      toast.error(firstValidation || dbHint || data?.message || networkHint || 'Login failed');
       throw err;
     }
   };
 
-  const register = async (data) => {
-    try {
-      const res = await authAPI.register(data);
-      localStorage.setItem('token', res.data.token);
-      setUser(res.data.user);
-      setShowLoginModal(false);
-      toast.success('Welcome to Manikanta Khadi & Handlooms!');
-      return res.data;
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
-      throw err;
-    }
+  /** Registration removed — login with email/password creates the account */
+  const register = async () => {
+    toast.error('Please use Login. New emails are registered automatically on first login.');
+    setShowLoginModal(true);
+    throw new Error('Registration disabled');
   };
 
   const sendOTP = async (data) => {
@@ -110,9 +124,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const refreshCart = async () => {
-    if (!user) return;
-    const res = await cartAPI.get();
-    setCart(res.data.cart);
+    if (!localStorage.getItem('token')) return null;
+    try {
+      const res = await cartAPI.get();
+      const next = res.data.cart || { items: [], savedForLater: [] };
+      setCart(next);
+      return next;
+    } catch {
+      return null;
+    }
   };
 
   const refreshWishlist = async () => {

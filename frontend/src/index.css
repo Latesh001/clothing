@@ -498,6 +498,47 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 12px rgba(212, 101, 74, 0.35);
 }
 
+.shop-filter-panel {
+  background: linear-gradient(165deg, #FFFEF9 0%, #FBF3E0 100%);
+  border-radius: 1.35rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(31, 85, 112, 0.12);
+  box-shadow: 0 8px 24px rgba(18, 48, 64, 0.06);
+}
+
+.gallery-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  box-shadow: 0 6px 20px rgba(18, 48, 64, 0.1);
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+
+.gallery-frame:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 32px rgba(31, 85, 112, 0.16);
+}
+
+.content-reveal {
+  animation: fadeUp 0.55s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .content-reveal,
+  .hero-kenburns,
+  .feature-icon,
+  .shipping-banner,
+  .shipping-banner__track,
+  .shipping-banner__dot {
+    animation: none !important;
+  }
+  .shipping-banner__track {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
 .navbar,
 .navbar-nav,
 .nav-link {

@@ -21,6 +21,7 @@ const trackingSchema = new mongoose.Schema({
   },
   message: String,
   location: String,
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
   timestamp: { type: Date, default: Date.now },
 });
 
@@ -78,7 +79,7 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned'],
+    enum: ['pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'returned'],
     default: 'pending',
   },
   tracking: [trackingSchema],
@@ -91,7 +92,6 @@ const orderSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 orderSchema.index({ user: 1, createdAt: -1 });
-orderSchema.index({ orderNumber: 1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ upiTransactionId: 1 }, { unique: true, sparse: true });
 orderSchema.index({ upiTransactionHash: 1 }, { unique: true, sparse: true });

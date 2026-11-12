@@ -205,7 +205,7 @@ const AdminOrders = () => {
                       onChange={(e) => updateStatus(order._id, e.target.value)}
                       className="text-sm px-2 py-1.5 rounded border bg-white"
                     >
-                      {['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].map(
+                      {['pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'].map(
                         (s) => (
                           <option key={s} value={s}>
                             {s}

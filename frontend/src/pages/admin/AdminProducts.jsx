@@ -2,17 +2,19 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FiPlus, FiEdit2, FiTrash2, FiEye, FiEyeOff } from 'react-icons/fi';
 import { adminAPI } from '../../services/api';
-import { formatPrice } from '../../utils/helpers';
+import { formatPrice, getImageUrl } from '../../utils/helpers';
+import { IMAGES } from '../../utils/images';
 import toast from 'react-hot-toast';
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const fetchProducts = () => {
     adminAPI.getProducts({ limit: 50 })
       .then(res => setProducts(res.data.products))
-      .catch(console.error)
+      .catch((err) => setError(err.response?.data?.message || 'Could not load products.'))
       .finally(() => setLoading(false));
   };
 
@@ -65,11 +67,21 @@ const AdminProducts = () => {
             <tbody>
               {loading ? (
                 <tr><td colSpan={6} className="p-8 text-center text-gray-500">Loading...</td></tr>
+              ) : error ? (
+                <tr><td colSpan={6} className="p-8 text-center text-red-600">{error}</td></tr>
               ) : products.map(p => (
                 <tr key={p._id} className="border-t border-gray-100 hover:bg-gray-50">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <img src={p.images?.[0]?.url} alt="" className="w-10 h-12 object-cover rounded" />
+                      <img
+                        src={getImageUrl(p.images?.[0]?.url) || IMAGES.fallback}
+                        alt=""
+                        className="w-10 h-12 object-cover rounded"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = IMAGES.fallback;
+                        }}
+                      />
                       <span className="font-medium text-sm line-clamp-1">{p.name}</span>
                     </div>
                   </td>

@@ -37,7 +37,7 @@ const Login = () => {
               Welcome back to natural weaves
             </h1>
             <p className="text-white/85 max-w-md">
-              Sign in with any phone number, email, and password — or continue with Google.
+              Sign in with your email and password — or continue with Google.
             </p>
           </div>
         </div>
@@ -53,7 +53,7 @@ const Login = () => {
               </Link>
               <h2 className="font-[family-name:var(--font-display)] text-3xl text-[#1A1714]">Login</h2>
               <p className="text-sm text-[#6E655C] mt-2">
-                Enter any phone number, your email, and password
+                Email &amp; password only — no separate register page. New emails create an account on first login.
               </p>
             </div>
 

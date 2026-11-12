@@ -15,7 +15,16 @@ exports.protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
     }
 
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('change_in_production')) {
+      console.warn('⚠ JWT_SECRET is weak or default — set a strong secret in production.');
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Block admin tokens from customer routes
+    if (decoded.role === 'admin') {
+      return res.status(403).json({ success: false, message: 'Use the admin panel for admin access.' });
+    }
+
     const user = await User.findById(decoded.id).select('-password');
     if (!user || !user.isActive) {
       return res.status(401).json({ success: false, message: 'User not found or deactivated.' });

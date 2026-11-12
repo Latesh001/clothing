@@ -59,10 +59,6 @@ const userSchema = new mongoose.Schema({
   lastLogin: Date,
 }, { timestamps: true });
 
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
-userSchema.index({ referralCode: 1 });
-
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
@@ -70,6 +66,7 @@ userSchema.pre('save', async function (next) {
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 

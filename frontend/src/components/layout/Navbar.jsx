@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { FiSearch, FiHeart, FiShoppingBag, FiUser, FiMenu, FiX } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { productAPI } from '../../services/api';
-import { formatPrice } from '../../utils/helpers';
+import { formatPrice, getImageUrl } from '../../utils/helpers';
 import { IMAGES } from '../../utils/images';
 
 const categories = [
@@ -177,9 +177,13 @@ const Navbar = () => {
                     className="flex items-center gap-3 px-4 py-3 hover:bg-[#F3EFE6]"
                   >
                     <img
-                      src={p.images?.[0]?.url || IMAGES.fallback}
+                      src={getImageUrl(p.images?.[0]?.url) || IMAGES.fallback}
                       alt={p.name}
                       className="w-11 h-14 object-cover rounded-lg"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = IMAGES.fallback;
+                      }}
                     />
                     <div>
                       <p className="text-sm font-semibold text-[#1A1714]">{p.name}</p>

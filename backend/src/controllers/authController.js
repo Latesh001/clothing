@@ -1,9 +1,19 @@
-const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User');
 const { sendWelcomeEmail, sendOTPEmail } = require('../services/emailService');
+const {
+  checkLoginAllowed,
+  recordLoginFailure,
+  clearLoginFailures,
+} = require('../middleware/securityGuards');
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const clientIp = (req) =>
+  req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() ||
+  req.ip ||
+  req.socket?.remoteAddress ||
+  '';
 
 const sendTokenResponse = (user, statusCode, res, message) => {
   const token = user.generateAuthToken();
@@ -23,26 +33,16 @@ const sendTokenResponse = (user, statusCode, res, message) => {
   });
 };
 
-exports.register = async (req, res, next) => {
-  try {
-    const { name, email, phone, password } = req.body;
-    const existing = await User.findOne({ $or: [{ email }, ...(phone ? [{ phone }] : [])] });
-    if (existing) {
-      return res.status(400).json({ success: false, message: 'User already exists with this email or phone.' });
-    }
+const queueWelcome = (user) => {
+  setImmediate(() => sendWelcomeEmail(user).catch((err) => console.error('Welcome email:', err.message)));
+};
 
-    const user = await User.create({
-      name,
-      email,
-      phone,
-      password,
-      referralCode: uuidv4().slice(0, 8).toUpperCase(),
-    });
-
-    sendTokenResponse(user, 201, res, 'Registration successful');
-  } catch (error) {
-    next(error);
-  }
+/** Public registration disabled — first login creates the account */
+exports.register = async (req, res) => {
+  return res.status(410).json({
+    success: false,
+    message: 'Registration page is closed. Please use Login with email and password.',
+  });
 };
 
 const normalizePhone = (phone = '') => String(phone).replace(/\D/g, '');
@@ -53,19 +53,12 @@ exports.login = async (req, res, next) => {
     const phoneRaw = (req.body.phone || '').trim();
     const phone = normalizePhone(phoneRaw);
     const password = req.body.password;
+    const ip = clientIp(req);
 
-    if (!email || !phone || !password) {
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please enter phone number, email, and password.',
-      });
-    }
-
-    // Accept any phone number (8–15 digits), not a fixed number
-    if (phone.length < 8 || phone.length > 15) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please enter a valid phone number.',
+        message: 'Please enter email and password.',
       });
     }
 
@@ -76,73 +69,87 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Find by email and phone separately to avoid wrong-user match
-    const [byEmail, byPhone] = await Promise.all([
-      User.findOne({ email }).select('+password'),
-      User.findOne({
+    if (phone && (phone.length < 8 || phone.length > 15)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid phone number (8–15 digits).',
+      });
+    }
+
+    const lock = checkLoginAllowed(email, ip);
+    if (!lock.allowed) {
+      return res.status(429).json({ success: false, message: lock.message });
+    }
+
+    // Prefer email match. Phone is optional.
+    let user = await User.findOne({ email }).select('+password');
+
+    if (!user && phone) {
+      user = await User.findOne({
         $or: [
           { phone: phoneRaw },
           { phone },
           { phone: `+91${phone}` },
           ...(phone.length === 10 ? [{ phone: `91${phone}` }] : []),
         ],
-      }).select('+password'),
-    ]);
-
-    if (byEmail && byPhone && String(byEmail._id) !== String(byPhone._id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'This email and phone belong to different accounts. Use the matching pair.',
-      });
+      }).select('+password');
     }
 
-    let user = byEmail || byPhone;
-
-    // New customer — create account
+    // New customer — create account on first login (no separate register page)
     if (!user) {
       user = await User.create({
         name: email.split('@')[0],
         email,
-        phone,
+        ...(phone ? { phone } : {}),
         password,
         isVerified: true,
         referralCode: uuidv4().slice(0, 8).toUpperCase(),
+        lastLogin: new Date(),
       });
-      user.lastLogin = new Date();
-      await user.save();
-      sendWelcomeEmail(user).catch(() => {});
-      return sendTokenResponse(user, 201, res, 'Welcome! Your account is ready.');
+      clearLoginFailures(email, ip);
+      sendTokenResponse(user, 201, res, 'Welcome to Manikanta Khadi & Handlooms!');
+      queueWelcome(user);
+      return;
     }
 
-    // Existing Google/OTP account without password — set password on first form login
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'This account has been deactivated. Please contact support.',
+      });
+    }
+
+    // Google/OTP account without password — set password on first form login
     if (!user.password) {
       user.password = password;
-      user.email = user.email || email;
-      user.phone = user.phone || phone;
+      if (!user.email) user.email = email;
+      if (phone && !user.phone) user.phone = phone;
       user.isVerified = true;
       user.lastLogin = new Date();
       await user.save();
-      sendWelcomeEmail(user).catch(() => {});
-      return sendTokenResponse(user, 200, res, 'Login successful');
+      clearLoginFailures(email, ip);
+      sendTokenResponse(user, 200, res, 'Welcome to Manikanta Khadi & Handlooms!');
+      queueWelcome(user);
+      return;
     }
 
     const passwordOk = await user.comparePassword(password);
     if (!passwordOk) {
+      recordLoginFailure(email, ip);
       return res.status(401).json({
         success: false,
         message: 'Incorrect password. Please try again.',
       });
     }
 
-    // Sync missing fields
-    if (!user.email) user.email = email;
-    if (!user.phone) user.phone = phone;
+    if (phone && !user.phone) user.phone = phone;
     user.lastLogin = new Date();
     await user.save();
-    sendWelcomeEmail(user).catch(() => {});
-    return sendTokenResponse(user, 200, res, 'Login successful');
+    clearLoginFailures(email, ip);
+    sendTokenResponse(user, 200, res, 'Welcome back! Happy shopping.');
+    queueWelcome(user);
+    return;
   } catch (error) {
-    // Duplicate key (email/phone already taken with race condition)
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
@@ -155,7 +162,12 @@ exports.login = async (req, res, next) => {
 
 exports.sendOTP = async (req, res, next) => {
   try {
-    const { email, phone, type = 'login' } = req.body;
+    const email = String(req.body.email || '').toLowerCase().trim();
+    const phone = String(req.body.phone || '').trim();
+    const { type = 'login' } = req.body;
+    if (!email && !phone) {
+      return res.status(400).json({ success: false, message: 'Email is required to request a verification code.' });
+    }
     const query = email ? { email } : { phone };
     let user = await User.findOne(query);
 
@@ -193,7 +205,12 @@ exports.sendOTP = async (req, res, next) => {
 
 exports.verifyOTP = async (req, res, next) => {
   try {
-    const { email, phone, otp } = req.body;
+    const email = String(req.body.email || '').toLowerCase().trim();
+    const phone = String(req.body.phone || '').trim();
+    const otp = String(req.body.otp || '').trim();
+    if (!email && !phone) {
+      return res.status(400).json({ success: false, message: 'Email is required to verify the code.' });
+    }
     const query = email ? { email } : { phone };
     const user = await User.findOne(query);
 
@@ -214,8 +231,8 @@ exports.verifyOTP = async (req, res, next) => {
     user.lastLogin = new Date();
     await user.save();
 
-    if (user.email) await sendWelcomeEmail(user);
-    sendTokenResponse(user, 200, res, 'OTP verified successfully');
+    sendTokenResponse(user, 200, res, 'Welcome to Manikanta Khadi & Handlooms!');
+    if (user.email) queueWelcome(user);
   } catch (error) {
     next(error);
   }
@@ -241,8 +258,8 @@ exports.googleLogin = async (req, res, next) => {
       await user.save();
     }
 
-    await sendWelcomeEmail(user);
-    sendTokenResponse(user, 200, res, 'Google login successful');
+    sendTokenResponse(user, 200, res, 'Welcome to Manikanta Khadi & Handlooms!');
+    queueWelcome(user);
   } catch (error) {
     next(error);
   }

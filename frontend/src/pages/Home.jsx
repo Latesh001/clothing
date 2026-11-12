@@ -38,26 +38,34 @@ const Home = () => {
           name="description"
           content="Discover natural khadi sarees, dupattas and dress materials woven with care by Indian artisans."
         />
+        <link rel="preload" as="image" href={IMAGES.hero} fetchPriority="high" />
       </Helmet>
 
-      {/* Full-bleed hero */}
+      {/* Full-bleed hero — brand first */}
       <section className="relative min-h-[78vh] md:min-h-[88vh] overflow-hidden -mt-[110px] pt-[110px]">
         <img
           src={IMAGES.hero}
-          alt="Handwoven saree collection"
+          alt="Manikanta Khadi & Handlooms handwoven collection"
           className="absolute inset-0 w-full h-full object-cover object-center hero-kenburns"
+          fetchPriority="high"
+          decoding="async"
+          width={1600}
+          height={1067}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0E2A38]/80 via-[#1F5570]/45 to-[#C26A3D]/25" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0E2A38]/82 via-[#1F5570]/48 to-[#C26A3D]/28" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_70%,rgba(232,184,74,0.22),transparent_55%)]" />
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 min-h-[calc(78vh-110px)] md:min-h-[calc(88vh-110px)] flex items-center">
-          <div className="max-w-xl text-white py-16">
-            <p className="fade-up text-[#E8B84A] tracking-[0.28em] uppercase text-xs sm:text-sm mb-4 font-semibold drop-shadow">
-              Manikanta Khadi & Handlooms
+          <div className="max-w-2xl text-white py-16">
+            <p className="fade-up text-[#E8B84A] tracking-[0.32em] uppercase text-[0.7rem] sm:text-xs mb-3 font-bold drop-shadow">
+              Handwoven · Natural · Indian
             </p>
-            <h1 className="fade-up fade-up-delay-1 font-[family-name:var(--font-display)] text-4xl sm:text-5xl md:text-6xl lg:text-7xl mb-5 text-white leading-[1.1] drop-shadow-md">
-              Woven from earth,<br />worn with grace
+            <h1 className="fade-up fade-up-delay-1 font-[family-name:var(--font-display)] text-[2.35rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] mb-4 text-white leading-[1.08] drop-shadow-md">
+              Manikanta Khadi<br />&amp; Handlooms
             </h1>
-            <p className="fade-up fade-up-delay-2 text-base sm:text-lg text-white/95 mb-8 max-w-md leading-relaxed">
+            <p className="fade-up fade-up-delay-2 text-lg sm:text-xl text-white/95 mb-2 font-[family-name:var(--font-display)] italic">
+              Woven from earth, worn with grace
+            </p>
+            <p className="fade-up fade-up-delay-2 text-base text-white/90 mb-8 max-w-md leading-relaxed">
               Soft khadi sarees and handloom pieces made slowly, naturally, and beautifully.
             </p>
             <div className="fade-up fade-up-delay-3 flex flex-wrap gap-3">
@@ -87,6 +95,8 @@ const Home = () => {
                 <img
                   src={getCategoryImage(cat.slug, i)}
                   alt={cat.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0E2A38]/85 via-[#1F5570]/25 to-transparent" />
@@ -115,7 +125,7 @@ const Home = () => {
 
       {/* Festival band */}
       <section className="festival-band relative py-20 md:py-24 overflow-hidden">
-        <img src={IMAGES.festival} alt="Festival collection" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={IMAGES.festival} alt="Festival collection" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
         <div className="relative z-10 max-w-3xl mx-auto px-4 text-center text-white">
           <p className="text-[#E8B84A] tracking-[0.28em] uppercase text-xs font-bold mb-3">Limited Season Edit</p>
           <h2 className="font-[family-name:var(--font-display)] text-3xl md:text-5xl mb-4 text-white drop-shadow">
@@ -175,7 +185,7 @@ const Home = () => {
       <section className="story-panel py-16 md:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 grid md:grid-cols-2 gap-10 md:gap-16 items-center">
           <div className="rounded-[1.75rem] overflow-hidden shadow-xl ring-2 ring-[#E8B84A]/40">
-            <img src={IMAGES.story} alt="Artisan handloom weaving" className="w-full h-full object-cover aspect-[4/3]" />
+            <img src={IMAGES.story} alt="Artisan handloom weaving" loading="lazy" decoding="async" className="w-full h-full object-cover aspect-[4/3]" />
           </div>
           <div>
             <p className="text-[#C26A3D] tracking-[0.2em] uppercase text-xs font-bold mb-3">Our Story</p>
@@ -223,10 +233,12 @@ const Home = () => {
           <p className="section-subtitle">A glimpse of our natural weave stories</p>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
             {IMAGES.gallery.map((src, i) => (
-              <div key={src} className="aspect-square overflow-hidden rounded-2xl group ring-1 ring-[#E8B84A]/30 hover:ring-2 hover:ring-[#E8B84A]/70 transition-all shadow-sm hover:shadow-lg">
+              <div key={src} className="gallery-frame aspect-square group ring-1 ring-[#E8B84A]/30 hover:ring-2 hover:ring-[#E8B84A]/70">
                 <img
                   src={src}
                   alt={`Handloom gallery ${i + 1}`}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
               </div>

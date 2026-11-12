@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../context/AuthContext';
 import { orderAPI } from '../services/api';
-import { formatPrice } from '../utils/helpers';
+import { formatPrice, getImageUrl } from '../utils/helpers';
+import { IMAGES } from '../utils/images';
 import toast from 'react-hot-toast';
+import { openAdminWhatsAppIfNeeded } from '../utils/whatsappNotify';
 
 const Checkout = () => {
-  const { user, cart, refreshCart } = useAuth();
+  const { user, cart, loading: authLoading, refreshCart } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
   const [address, setAddress] = useState({
     fullName: user?.name || '',
     phone: user?.phone || '',
@@ -32,6 +35,40 @@ const Checkout = () => {
   const discount = cart.couponDiscount || 0;
   const total = subtotal + shipping - discount;
 
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      navigate('/cart', { replace: true });
+      return;
+    }
+
+    // Payment confirmation step can keep working after cart is cleared
+    if (step === 4) {
+      setReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const latest = items.length ? cart : await refreshCart();
+      if (cancelled) return;
+      const nextItems = latest?.items || items;
+      if (!nextItems.length) {
+        toast.error('Your cart is empty');
+        navigate('/cart', { replace: true });
+        return;
+      }
+      setReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Only gate entry once auth/cart are known — avoid re-running on every cart keystroke
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user, step]);
+
   const handlePlaceOrder = async () => {
     if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.pincode) {
       toast.error('Please fill all required address fields');
@@ -41,6 +78,7 @@ const Checkout = () => {
     setLoading(true);
     try {
       const res = await orderAPI.create({ shippingAddress: address, paymentMethod });
+      openAdminWhatsAppIfNeeded(res.data);
 
       if (paymentMethod === 'cod') {
         toast.success('Order placed successfully!');
@@ -102,9 +140,12 @@ const Checkout = () => {
     }
   };
 
-  if (!user || (!items.length && step !== 4)) {
-    navigate('/cart');
-    return null;
+  if (authLoading || !ready) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center text-[#6E655C]">
+        Preparing checkout...
+      </div>
+    );
   }
 
   const paymentLabels = {
@@ -206,7 +247,15 @@ const Checkout = () => {
                 <h2 className="font-serif text-xl mb-4">Order Review</h2>
                 {items.map((item) => (
                   <div key={item._id} className="flex gap-3 py-3 border-b">
-                    <img src={item.product?.images?.[0]?.url} alt="" className="w-16 h-20 object-cover rounded" />
+                    <img
+                      src={getImageUrl(item.product?.images?.[0]?.url) || IMAGES.fallback}
+                      alt=""
+                      className="w-16 h-20 object-cover rounded"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = IMAGES.fallback;
+                      }}
+                    />
                     <div className="flex-1">
                       <p className="font-medium text-sm">{item.product?.name}</p>
                       <p className="text-sm text-gray-500">Qty: {item.quantity}</p>

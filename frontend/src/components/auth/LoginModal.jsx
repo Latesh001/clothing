@@ -20,8 +20,9 @@ const LoginModal = () => {
           >
             <FiX size={20} />
           </button>
-          <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">Welcome back</h2>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl text-white">Login</h2>
           <p className="text-[#E8B84A] text-sm mt-1 font-semibold">Manikanta Khadi & Handlooms</p>
+          <p className="text-white/85 text-xs mt-2">Happy shopping starts here</p>
         </div>
         <div className="p-6">
           <LoginForm onSuccess={() => setShowLoginModal(false)} />

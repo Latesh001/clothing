@@ -15,7 +15,6 @@ const decodeGoogleCredential = (credential) => {
   }
 };
 
-/** Accept any phone with 8–15 digits (India or international). */
 const isValidPhone = (phone) => {
   const digits = String(phone || '').replace(/\D/g, '');
   return digits.length >= 8 && digits.length <= 15;
@@ -42,12 +41,8 @@ const LoginForm = ({ onSuccess }) => {
     const phone = form.phone.trim();
     const password = form.password;
 
-    if (!phone || !email || !password) {
-      toast.error('Please enter phone number, email, and password');
-      return;
-    }
-    if (!isValidPhone(phone)) {
-      toast.error('Enter a valid phone number (8–15 digits)');
+    if (!email || !password) {
+      toast.error('Please enter email and password');
       return;
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
@@ -58,10 +53,21 @@ const LoginForm = ({ onSuccess }) => {
       toast.error('Password must be at least 6 characters');
       return;
     }
+    if (phone && !isValidPhone(phone)) {
+      toast.error('Enter a valid phone number (8–15 digits), or leave it blank');
+      return;
+    }
 
     setLoading(true);
     try {
-      await login({ email, phone, password }, 'credentials');
+      await login(
+        {
+          email,
+          password,
+          ...(phone ? { phone } : {}),
+        },
+        'credentials'
+      );
       onSuccess?.();
     } catch {
       /* handled in context */
@@ -78,12 +84,15 @@ const LoginForm = ({ onSuccess }) => {
         toast.error('Could not read Google account details');
         return;
       }
-      await login({
-        googleId: profile.sub,
-        email: profile.email,
-        name: profile.name || profile.email.split('@')[0],
-        avatar: profile.picture || '',
-      }, 'google');
+      await login(
+        {
+          googleId: profile.sub,
+          email: profile.email,
+          name: profile.name || profile.email.split('@')[0],
+          avatar: profile.picture || '',
+        },
+        'google'
+      );
       onSuccess?.();
     } catch {
       /* handled in context */
@@ -124,7 +133,9 @@ const LoginForm = ({ onSuccess }) => {
               VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
             </code>
           </li>
-          <li>Restart frontend with <code>npm run dev</code></li>
+          <li>
+            Restart frontend with <code>npm run dev</code>
+          </li>
         </ol>
         <button type="button" onClick={() => setShowGoogleSetup(false)} className="btn-outline-dark w-full !py-2.5">
           Back to Login
@@ -138,25 +149,6 @@ const LoginForm = ({ onSuccess }) => {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E655C] mb-1.5">
-            Phone Number
-          </label>
-          <div className="relative">
-            <FiPhone className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E655C]" />
-            <input
-              name="phone"
-              type="tel"
-              inputMode="tel"
-              value={form.phone}
-              onChange={handleChange}
-              placeholder="Any phone number e.g. 98765 43210"
-              required
-              className="w-full pl-10 pr-4 py-3 rounded-2xl bg-[#F3EFE6] text-[#1A1714] outline-none focus:ring-2 focus:ring-[#2A3F4F]/25"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E655C] mb-1.5">
             Email Address
           </label>
           <div className="relative">
@@ -168,6 +160,7 @@ const LoginForm = ({ onSuccess }) => {
               onChange={handleChange}
               placeholder="you@example.com"
               required
+              autoComplete="email"
               className="w-full pl-10 pr-4 py-3 rounded-2xl bg-[#F3EFE6] text-[#1A1714] outline-none focus:ring-2 focus:ring-[#2A3F4F]/25"
             />
           </div>
@@ -186,6 +179,7 @@ const LoginForm = ({ onSuccess }) => {
               placeholder="At least 6 characters"
               required
               minLength={6}
+              autoComplete="current-password"
               className="w-full pl-4 pr-12 py-3 rounded-2xl bg-[#F3EFE6] text-[#1A1714] outline-none focus:ring-2 focus:ring-[#2A3F4F]/25"
             />
             <button
@@ -199,8 +193,27 @@ const LoginForm = ({ onSuccess }) => {
           </div>
         </div>
 
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E655C] mb-1.5">
+            Phone Number <span className="normal-case font-normal">(optional)</span>
+          </label>
+          <div className="relative">
+            <FiPhone className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E655C]" />
+            <input
+              name="phone"
+              type="tel"
+              inputMode="tel"
+              value={form.phone}
+              onChange={handleChange}
+              placeholder="Optional — for new accounts / orders"
+              autoComplete="tel"
+              className="w-full pl-10 pr-4 py-3 rounded-2xl bg-[#F3EFE6] text-[#1A1714] outline-none focus:ring-2 focus:ring-[#2A3F4F]/25"
+            />
+          </div>
+        </div>
+
         <button type="submit" disabled={loading} className="w-full btn-primary-custom py-3 disabled:opacity-50">
-          {loading ? 'Please wait...' : 'Continue'}
+          {loading ? 'Please wait...' : 'Login'}
         </button>
       </form>
 
@@ -238,7 +251,7 @@ const LoginForm = ({ onSuccess }) => {
           </button>
         )}
         <p className="text-xs text-[#6E655C] text-center">
-          Use any phone number with your email and password, or sign in with Google.
+          Login with email &amp; password. First-time email creates your account automatically — no separate register page.
         </p>
       </div>
     </>

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FiUpload, FiX } from 'react-icons/fi';
 import { adminAPI, productAPI } from '../../services/api';
+import { getImageUrl } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 
 const AdminProductForm = () => {
@@ -48,11 +49,16 @@ const AdminProductForm = () => {
       setCategories(cats);
       setSubcategories(subs);
       if (!cats.length) {
-        toast.error('No categories found. Run: npm run seed in backend folder');
+        toast.error('No categories found. In the backend folder run: npm run seed');
       }
     } catch (err) {
       console.error(err);
-      toast.error('Could not load categories. Check backend is running.');
+      const unreachable = !err.response;
+      toast.error(
+        unreachable
+          ? 'Cannot reach API. Start backend (npm run dev) and refresh.'
+          : 'Could not load categories. Check backend is running.'
+      );
       setCategories([]);
       setSubcategories([]);
     } finally {
@@ -93,7 +99,7 @@ const AdminProductForm = () => {
           palluType: product.palluType || '',
         });
         if (product.images?.length) {
-          setPreviews(product.images.map((img) => img.url));
+          setPreviews(product.images.map((img) => getImageUrl(img.url) || img.url));
         }
       })
       .catch(() => toast.error('Could not load product'));
@@ -268,7 +274,11 @@ const AdminProductForm = () => {
             <div className="mt-3 flex flex-wrap gap-3">
               {previews.map((src, i) => (
                 <div key={`${src}-${i}`} className="relative w-20 h-24 rounded-lg overflow-hidden bg-[#E8E0D0]">
-                  <img src={src.startsWith('http') || src.startsWith('blob') || src.startsWith('/') ? src : src} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={src.startsWith('blob:') ? src : getImageUrl(src) || src}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => removePreview(i)}
